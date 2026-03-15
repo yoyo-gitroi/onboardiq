@@ -1,0 +1,75 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && (
+        (request.auth.token.email == "yash.vats@agentic.it" && request.auth.token.email_verified == true) ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role == 'admin')
+      );
+    }
+
+    function isHR() {
+      return isAuthenticated() && (
+        isAdmin() ||
+        (exists(/databases/$(database)/documents/users/$(request.auth.uid)) && 
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.role in ['hr', 'admin'])
+      );
+    }
+
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    function hasOnlyAllowedFields(fields) {
+      return request.resource.data.keys().hasOnly(fields);
+    }
+
+    function isValidEmail(email) {
+      return email is string && email.matches("^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$");
+    }
+
+    function isValidUser(data) {
+      return hasOnlyAllowedFields(['name', 'email', 'role', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             isValidEmail(data.email) &&
+             data.role in ['admin', 'hr'] &&
+             data.createdAt is timestamp;
+    }
+
+    function isValidCandidate(data) {
+      return hasOnlyAllowedFields(['candidateName', 'status', 'summary', 'documentsReceived', 'documentsMissing', 'extractedData', 'flags', 'routingLog', 'auditTrail', 'hrId', 'createdAt', 'updatedAt']) &&
+             data.candidateName is string && data.candidateName.size() > 0 && data.candidateName.size() < 100 &&
+             data.status in ['PENDING', 'APPROVED', 'BLOCKED'] &&
+             (!('summary' in data) || (data.summary is string && data.summary.size() < 5000)) &&
+             (!('documentsReceived' in data) || (data.documentsReceived is list && data.documentsReceived.size() <= 10)) &&
+             (!('documentsMissing' in data) || (data.documentsMissing is list && data.documentsMissing.size() <= 10)) &&
+             (!('extractedData' in data) || (data.extractedData is string && data.extractedData.size() < 100000)) &&
+             (!('flags' in data) || (data.flags is string && data.flags.size() < 50000)) &&
+             (!('routingLog' in data) || (data.routingLog is string && data.routingLog.size() < 50000)) &&
+             (!('auditTrail' in data) || (data.auditTrail is string && data.auditTrail.size() < 50000)) &&
+             data.hrId is string && data.hrId.size() > 0 && data.hrId.size() < 50 &&
+             data.createdAt is timestamp &&
+             data.updatedAt is timestamp;
+    }
+
+    match /users/{userId} {
+      allow read: if isAuthenticated();
+      allow create: if isAuthenticated() && isValidUser(request.resource.data) && (isAdmin() || (isOwner(userId) && request.resource.data.role == 'hr'));
+      allow update: if isAuthenticated() && isValidUser(request.resource.data) && (isAdmin() || (isOwner(userId) && request.resource.data.role == resource.data.role));
+      allow delete: if isAdmin();
+    }
+
+    match /candidates/{candidateId} {
+      allow read: if isHR();
+      allow create: if isHR() && isValidCandidate(request.resource.data) && request.resource.data.hrId == request.auth.uid;
+      allow update: if isHR() && isValidCandidate(request.resource.data) && request.resource.data.createdAt == resource.data.createdAt;
+      allow delete: if isAdmin();
+    }
+  }
+}

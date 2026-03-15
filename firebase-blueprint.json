@@ -1,0 +1,52 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "HR personnel using the system",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "email": { "type": "string", "format": "email" },
+        "role": { "type": "string", "enum": ["admin", "hr"] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "email", "role", "createdAt"]
+    },
+    "Candidate": {
+      "title": "Candidate",
+      "description": "A new hire being processed",
+      "type": "object",
+      "properties": {
+        "candidateName": { "type": "string" },
+        "status": { "type": "string", "enum": ["PENDING", "APPROVED", "BLOCKED"] },
+        "summary": { "type": "string" },
+        "documentsReceived": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "documentsMissing": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "extractedData": { "type": "string", "description": "JSON stringified extracted data" },
+        "flags": { "type": "string", "description": "JSON stringified array of flags" },
+        "routingLog": { "type": "string", "description": "JSON stringified array of routing actions" },
+        "auditTrail": { "type": "string", "description": "JSON stringified array of audit logs" },
+        "hrId": { "type": "string", "description": "ID of the HR user who uploaded this candidate" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["candidateName", "status", "hrId", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Stores HR user profiles"
+    },
+    "/candidates/{candidateId}": {
+      "schema": "Candidate",
+      "description": "Stores candidate onboarding reports and data"
+    }
+  }
+}
